@@ -1,0 +1,28 @@
+{
+  "name": "downtorrent",
+  "version": "1.0.0",
+  "description": "simple torrent downloader",
+  "main": "index.js",
+  "scripts": {
+    "start": "ts-node src/downTorrent.ts"
+  },
+  "author": "richox",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^0.21.1",
+    "bencode": "^2.0.1",
+    "lodash": "^4.17.21",
+    "log4js": "^6.3.0",
+    "moment": "^2.29.1",
+    "numeral": "^2.0.6",
+    "parse-torrent": "^9.1.3"
+  },
+  "devDependencies": {
+    "@types/bencode": "^2.0.0",
+    "@types/lodash": "^4.14.168",
+    "@types/numeral": "^2.0.1",
+    "@types/parse-torrent": "^5.8.3",
+    "ts-node": "^9.1.1",
+    "typescript": "^4.2.4"
+  }
+}

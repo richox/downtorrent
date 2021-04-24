@@ -13,6 +13,7 @@ import {
   PeerPieceMessage,
   PeerRequestOrCancelMessage
 } from "./peerMessage";
+import {BitSet} from "./util/bitSet";
 
 const logger = log4js.getLogger("Peer");
 logger.level = "info";
@@ -28,7 +29,7 @@ export class Peer {
   _incomingBuffer: Buffer = Buffer.alloc(0);
 
   _handshaked: boolean = false;
-  _bitfield: Buffer = Buffer.alloc(0);
+  _bitfield: BitSet;
   _downloadingSubPieces: number = 0;
 
   public constructor(peerAddr: string) {
@@ -156,7 +157,11 @@ export class Peer {
   }
 
   private processBitfieldMessage(message: PeerBitfieldMessage) {
-    this._bitfield = message.bitfield;
+    const expectedBitfieldLength = Math.trunc((state.torrent.pieces?.length + 7) / 8);
+    if (message.bitfield.length != expectedBitfieldLength) {
+      throw Error(`unexpected bitfield length: ${message.bitfield.length}, expect: ${expectedBitfieldLength}`);
+    }
+    this._bitfield = new BitSet(state.torrent.pieces?.length, message.bitfield);
   }
 
   private processRequestMessage(message: PeerRequestOrCancelMessage) {
@@ -174,12 +179,6 @@ export class Peer {
     logger.debug("received Cancel message");
   }
 
-  private hasPiece(i: number): boolean {
-    let div = Math.floor(i / 8);
-    let mod = i % 8;
-    return ((this._bitfield.readUInt8(div) >> (7 - mod)) & 1) == 1;
-  }
-
   private downloadNextSubPieces() {
     while (this._downloadingSubPieces < Peer.numConcurrentDownloadingSubPieces) {
       this._downloadingSubPieces += 1;
@@ -191,7 +190,7 @@ export class Peer {
     const downloadablePieceIndexes = state.pieces
       .map((piece, pieceIndex) => !piece.completed ? pieceIndex : null)
       .filter(pieceIndex => pieceIndex != null)
-      .filter(pieceIndex => this.hasPiece(pieceIndex));
+      .filter(pieceIndex => this._bitfield.getBit(pieceIndex));
 
     if (downloadablePieceIndexes.length == 0) { // no sub pieces can be downloaded from this peer, close it
       this._socket.end();

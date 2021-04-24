@@ -170,7 +170,7 @@ export function decodeMessage(buffer: Buffer): {
         case PeerMessageType.BITFIELD:
           const bitfieldMessage: PeerBitfieldMessage = {
             messageType,
-            bitfield: buffer.slice(5),
+            bitfield: buffer.slice(5, messageLength),
           };
           return {messageLength, message: bitfieldMessage};
 

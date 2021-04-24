@@ -27,8 +27,16 @@ export class Piece {
     this._subPieceCompletedCount = 0;
   }
 
+  public get pieceIndex() {
+    return this._pieceIndex;
+  }
+
+  public get pieceLength() {
+    return this._pieceLength;
+  }
+
   public get completed(): boolean {
-    return this.subPieceCompletedCount == this.subPieceTotalCount;
+    return this._subPieceCompletedCount == this.subPieceTotalCount;
   }
 
   public get subPieceTotalCount(): number {
@@ -51,14 +59,14 @@ export class Piece {
     }
   }
 
-  public getRandomIncompletedSubPiece(): {
+  public getFirstIncompletedSubPiece(subPieceOffsetHint: number = 0): {
     subPieceOffset: number;
     subPieceLength: number;
   } {
-    const subPieceIndexes = this._subPieceCompleted
-      .map((completed, subPieceIndex) => !completed ? subPieceIndex : null)
-      .filter(subPieceIndex => subPieceIndex != null);
-    const subPieceIndex = subPieceIndexes[Math.trunc(Math.random() * subPieceIndexes.length)];
+
+    // find first incompleted sub piece after subPieceOffsetHint
+    const subPieceIndex = this._subPieceCompleted
+      .findIndex((completed, i) => !completed && i * Piece.subPieceLength >= subPieceOffsetHint);
     const subPieceOffset = subPieceIndex * Piece.subPieceLength;
     const subPieceLength = Math.min(Piece.subPieceLength, this._pieceLength - subPieceOffset);
     return {

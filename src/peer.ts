@@ -30,6 +30,9 @@ export class Peer {
 
   _handshaked: boolean = false;
   _bitfield: BitSet;
+
+  _downloadingPieceIndex: number = null;
+  _downloadingSubPieceOffset: number = null;
   _downloadingSubPieces: number = 0;
 
   public constructor(peerAddr: string) {
@@ -88,6 +91,7 @@ export class Peer {
       } catch (err) {
         this._socket.end();
         this._socket.destroy(Error(`received invalid message: ${err}`));
+        throw err;
       }
     });
 
@@ -187,28 +191,41 @@ export class Peer {
   }
 
   private downloadNextSubPiece() {
-    const downloadablePieceIndexes = state.pieces
-      .map((piece, pieceIndex) => !piece.completed ? pieceIndex : null)
-      .filter(pieceIndex => pieceIndex != null)
-      .filter(pieceIndex => this._bitfield.getBit(pieceIndex));
-
-    if (downloadablePieceIndexes.length == 0) { // no sub pieces can be downloaded from this peer, close it
-      this._socket.end();
-      return;
+    // downloadingPieceIndex not downloadable, select a new random one
+    if (this._downloadingPieceIndex == null
+      || this._bitfield.getBit(this._downloadingPieceIndex) == false
+      || state.pieces[this._downloadingPieceIndex].completed
+    ) {
+      const downloadablePieceIndexes = state.pieces
+        .map((piece, pieceIndex) => !piece.completed ? pieceIndex : null)
+        .filter(pieceIndex => pieceIndex != null)
+        .filter(pieceIndex => this._bitfield.getBit(pieceIndex));
+      if (downloadablePieceIndexes.length == 0) { // no more pieces can be downloaded from this peer, close it
+        this._socket.end();
+        return;
+      }
+      this._downloadingPieceIndex = downloadablePieceIndexes[Math.trunc(Math.random() * downloadablePieceIndexes.length)];
+      this._downloadingSubPieceOffset = 0;
     }
-    const pieceIndex = downloadablePieceIndexes[Math.trunc(Math.random() * downloadablePieceIndexes.length)];
+
     const {
       subPieceOffset,
       subPieceLength,
-    } = state.pieces[pieceIndex].getRandomIncompletedSubPiece();
+    } = state.pieces[this._downloadingPieceIndex].getFirstIncompletedSubPiece(this._downloadingSubPieceOffset);
 
     const requestMessage: PeerRequestOrCancelMessage = {
       messageType: PeerMessageType.REQUEST,
-      pieceIndex,
+      pieceIndex: this._downloadingPieceIndex,
       blockOffset: subPieceOffset,
       pieceLength: subPieceLength,
     };
     logger.debug("[%s] send Request message:", this._peerAddr, requestMessage);
     this._socket.write(encodeMessage(requestMessage));
+    this._downloadingSubPieceOffset = subPieceOffset + subPieceLength;
+    if ( this._downloadingSubPieceOffset >= state.pieces[this._downloadingPieceIndex].pieceLength) {
+      this._downloadingPieceIndex = (this._downloadingPieceIndex + 1) % state.pieces.length;
+      this._downloadingSubPieceOffset = 0;
+    }
   }
+
 }

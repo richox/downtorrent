@@ -1,6 +1,11 @@
 import fs from 'fs';
 import {config, state} from "./downTorrent";
 
+interface Range {
+  l: number;
+  r: number;
+}
+
 export class Piece {
   public static readonly subPieceLength: number = 16384;
 
@@ -63,38 +68,37 @@ export class Piece {
   }
 
   private writeSubPieceToFile(pieceIndex: number, subPieceData: Buffer, subPieceOffset: number) {
-    interface Range {
-      l: number;
-      r: number;
-    }
     const subPieceRange: Range = {
       l: pieceIndex * state.torrent.pieceLength + subPieceOffset,
-      r: pieceIndex * state.torrent.pieceLength + subPieceOffset + subPieceData.length,
+      r: pieceIndex * state.torrent.pieceLength + subPieceOffset + subPieceData.length - 1,
     };
 
-    for (let fileIndex = 0; fileIndex < state.torrent.files?.length; fileIndex++) {
+    let fileIndex = this.findFileContainingOffset(subPieceRange.l);
+    while (true) {
       const file = state.torrent.files[fileIndex];
       const fileRange = {
         l: file.offset,
-        r: file.offset + file.length,
+        r: file.offset + file.length - 1,
       };
+      const filename = `${config.downloadPath}/${file.name}`;
 
-      if (subPieceRange.l >= fileRange.l && subPieceRange.l < fileRange.r) {
+      if (subPieceRange.l >= fileRange.l && subPieceRange.l <= fileRange.r) {
         // subPiece:     |---->
         // file1:     |--*-->
         // file2:     |--*------>
-        this.writeFile(`${config.downloadPath}/${file.name}`,
-          subPieceRange.l - fileRange.l, subPieceData.slice(0, fileRange.r - subPieceRange.l));
-        continue;
-      }
-      if (subPieceRange.r >= fileRange.l && subPieceRange.r < fileRange.r) {
+        this.writeFile(filename, subPieceRange.l - fileRange.l, subPieceData.slice(0, fileRange.r - subPieceRange.l + 1));
+
+      } else if (subPieceRange.r >= fileRange.l && subPieceRange.r <= fileRange.r) {
         // subPiece:  |--*-->
         // file1:        |---->
         // file2:        |->
-        this.writeFile(`${config.downloadPath}/${file.name}`,
-          0, subPieceData.slice(fileRange.l - subPieceRange.l, fileRange.r - subPieceRange.l));
+        this.writeFile(filename, 0, subPieceData.slice(fileRange.l - subPieceRange.l, fileRange.r - subPieceRange.l + 1));
       }
-      continue;
+
+      if (fileRange.r >= subPieceRange.r) { // all data written
+        break;
+      }
+      fileIndex += 1;
     }
   }
 
@@ -102,5 +106,27 @@ export class Piece {
     const fd = fs.openSync(filename, fs.existsSync(filename) ? "r+" : "w+");
     fs.writeSync(fd, buffer, 0, buffer.length, offset);
     fs.closeSync(fd);
+  }
+
+  private findFileContainingOffset(offset: number): number {
+    let l = 0;
+    let r = state.torrent.files.length;
+    let m: number;
+
+    while (l < r) {
+      m = Math.trunc((l + r) / 2);
+      const file = state.torrent.files[m];
+
+      if (file.offset > offset) {
+        r = m - 1;
+        continue;
+      }
+      if (file.offset + file.length <= offset) {
+        l = m + 1;
+        continue;
+      }
+      break;
+    }
+    return m;
   }
 }

@@ -12,6 +12,7 @@ export class Piece {
   _pieceIndex: number;
   _pieceLength: number;
   _pieceHash: string;
+  _pieceCache: Buffer;
 
   _subPieceCompleted: boolean[];
   _subPieceCompletedCount: number;
@@ -21,6 +22,7 @@ export class Piece {
     this._pieceIndex = pieceIndex;
     this._pieceLength = pieceLength;
     this._pieceHash = pieceHash;
+    this._pieceCache = Buffer.alloc(pieceLength);
 
     this._completed = false;
     this._subPieceCompleted = Array.from({length: pieceLength / Piece.subPieceLength}, () => false);
@@ -51,11 +53,18 @@ export class Piece {
     if (subPieceOffset + subPieceData.length > this._pieceLength) {
       throw Error(`received piece length overflow: ${subPieceOffset + subPieceData.length}, sub piece length: ${subPieceData.length}`);
     }
-    const subPieceIndex = subPieceOffset / Piece.subPieceLength;
+
+    // write sub piece to buffer
+    const subPieceIndex = Math.trunc(subPieceOffset / Piece.subPieceLength);
     if (!this._subPieceCompleted[subPieceIndex]) {
-      this.writeSubPieceToFile(this._pieceIndex, subPieceData, subPieceOffset);
       this._subPieceCompleted[subPieceIndex] = true;
       this._subPieceCompletedCount += 1;
+      subPieceData.copy(this._pieceCache, subPieceOffset);
+    }
+
+    // write piece to file if completed
+    if (this.completed) {
+      this.writePieceToFile();
     }
   }
 
@@ -75,10 +84,10 @@ export class Piece {
     };
   }
 
-  private writeSubPieceToFile(pieceIndex: number, subPieceData: Buffer, subPieceOffset: number) {
+  private writePieceToFile() {
     const subPieceRange: Range = {
-      l: pieceIndex * state.torrent.pieceLength + subPieceOffset,
-      r: pieceIndex * state.torrent.pieceLength + subPieceOffset + subPieceData.length - 1,
+      l: this._pieceIndex * state.torrent.pieceLength,
+      r: this._pieceIndex * state.torrent.pieceLength + this._pieceCache.length - 1,
     };
 
     let fileIndex = this.findFileContainingOffset(subPieceRange.l);
@@ -94,13 +103,13 @@ export class Piece {
         // subPiece:     |---->
         // file1:     |--*-->
         // file2:     |--*------>
-        this.writeFile(filename, subPieceRange.l - fileRange.l, subPieceData.slice(0, fileRange.r - subPieceRange.l + 1));
+        this.writeFile(filename, subPieceRange.l - fileRange.l, this._pieceCache.slice(0, fileRange.r - subPieceRange.l + 1));
 
       } else if (subPieceRange.r >= fileRange.l && subPieceRange.r <= fileRange.r) {
         // subPiece:  |--*-->
         // file1:        |---->
         // file2:        |->
-        this.writeFile(filename, 0, subPieceData.slice(fileRange.l - subPieceRange.l, fileRange.r - subPieceRange.l + 1));
+        this.writeFile(filename, 0, this._pieceCache.slice(fileRange.l - subPieceRange.l, fileRange.r - subPieceRange.l + 1));
       }
 
       if (fileRange.r >= subPieceRange.r) { // all data written

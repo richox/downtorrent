@@ -1,6 +1,10 @@
 import crypto from "crypto";
 import fs from "fs";
+import log4js from "log4js";
 import {config, state} from "./downTorrent";
+
+const logger = log4js.getLogger("Piece");
+logger.level = "info";
 
 interface Range {
   l: number;
@@ -27,6 +31,21 @@ export class Piece {
     this._completed = false;
     this._subPieceCompleted = Array.from({length: pieceLength / Piece.subPieceLength}, () => false);
     this._subPieceCompletedCount = 0;
+
+    // check whether the piece has been downloaded
+    // if the piece is reachable and correct, mark the piece as completed and no need to download it again
+    this._pieceCache = Buffer.alloc(this._pieceLength);
+    try {
+      this.readPieceFromFile();
+      if (crypto.createHash("sha1").update(this._pieceCache).digest("hex").toUpperCase() == this._pieceHash.toUpperCase()) {
+        this._completed = true;
+        this._subPieceCompleted.fill(true);
+        this._subPieceCompletedCount = this._subPieceCompleted.length;
+      }
+    } catch (err) {
+      // cannot read file, leave the piece incompleted and do nothing
+    }
+    this._pieceCache = null;
   }
 
   public get pieceIndex() {
@@ -75,14 +94,21 @@ export class Piece {
 
     // write piece to file if completed
     if (this.completed) {
+      let written = false;
       const sha1sum = crypto.createHash("sha1").update(this._pieceCache).digest("hex");
       if (sha1sum.toUpperCase() == state.torrent.pieces[this._pieceIndex].toLocaleUpperCase()) {
-        this.writePieceToFile();
-      } else {
-        // checksum mismatch -- reset the whole piece
+        try {
+          this.writePieceToFile();
+          written = true;
+        } catch (err) {
+          logger.error("write piece to file error: %s", err.message);
+        }
+      }
+
+      if (!written) { // cannot write to file -- reset the piece
+        this._completed = false;
         this._subPieceCompleted.fill(false);
         this._subPieceCompletedCount = 0;
-        this._completed = false;
       }
     }
   }
@@ -103,7 +129,15 @@ export class Piece {
     };
   }
 
+  private readPieceFromFile() {
+    this.doPieceIO(this.readFile);
+  }
+
   private writePieceToFile() {
+    this.doPieceIO(this.writeFile);
+  }
+
+  private doPieceIO(ioFunc: (filename: string, offset: number, buffer: Buffer) => void) {
     const subPieceRange: Range = {
       l: this._pieceIndex * state.torrent.pieceLength,
       r: this._pieceIndex * state.torrent.pieceLength + this._pieceCache.length - 1,
@@ -122,13 +156,13 @@ export class Piece {
         // subPiece:     |---->
         // file1:     |--*-->
         // file2:     |--*------>
-        this.writeFile(filename, subPieceRange.l - fileRange.l, this._pieceCache.slice(0, fileRange.r - subPieceRange.l + 1));
+        ioFunc(filename, subPieceRange.l - fileRange.l, this._pieceCache.slice(0, fileRange.r - subPieceRange.l + 1));
 
       } else if (subPieceRange.r >= fileRange.l && subPieceRange.r <= fileRange.r) {
         // subPiece:  |--*-->
         // file1:        |---->
         // file2:        |->
-        this.writeFile(filename, 0, this._pieceCache.slice(fileRange.l - subPieceRange.l, fileRange.r - subPieceRange.l + 1));
+        ioFunc(filename, 0, this._pieceCache.slice(fileRange.l - subPieceRange.l, fileRange.r - subPieceRange.l + 1));
       }
 
       if (fileRange.r >= subPieceRange.r) { // all data written
@@ -141,6 +175,12 @@ export class Piece {
   private writeFile(filename: string, offset: number, buffer: Buffer) {
     const fd = fs.openSync(filename, fs.existsSync(filename) ? "r+" : "w+");
     fs.writeSync(fd, buffer, 0, buffer.length, offset);
+    fs.closeSync(fd);
+  }
+
+  private readFile(filename: string, offset: number, buffer: Buffer) {
+    const fd = fs.openSync(filename, fs.existsSync(filename) ? "r+" : "w+");
+    fs.readSync(fd, buffer, 0, buffer.length, offset);
     fs.closeSync(fd);
   }
 

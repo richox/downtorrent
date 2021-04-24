@@ -39,13 +39,21 @@ export const state: {
   peers: [],
   pieces: [],
 };
-state.pieces = Array.from({length: state.torrent.pieces?.length}, (_, pieceIndex) => {
-  return new Piece(pieceIndex, state.torrent.pieceLength, state.torrent.pieces[pieceIndex]);
-});
 
-// print download file info
+// init downloading files
 state.torrent.files.forEach(file => {
   logger.info("torrent file: [%sB] - %s", numeral(file.length).format("0.00a").toUpperCase(), file.name);
+  const filename = `${config.downloadPath}/${file.name}`;
+  if (!fs.existsSync(filename)) { // create file if not exists
+    const fd = fs.openSync(filename, "w+");
+    fs.closeSync(fd);
+  }
+  fs.truncateSync(filename, file.length); // truncate file to actual size
+});
+
+// init pieces
+state.pieces = Array.from({length: state.torrent.pieces?.length}, (_, pieceIndex) => {
+  return new Piece(pieceIndex, state.torrent.pieceLength, state.torrent.pieces[pieceIndex]);
 });
 
 // update peer list
@@ -106,14 +114,12 @@ setInterval(() => {
 }, 5000);
 
 // print download progress and speed
-const numTotalSubPieces = sum(state.pieces.map(piece => piece.subPieceTotalCount));
-const numStartCompletedSubPieces = 0;
+const numStartCompletedPieces = state.pieces.filter(piece => piece.completed).length;
 const startTime = moment();
 setInterval(() => {
-  const numCompletedSubPieces = sum(state.pieces.map(piece => piece.subPieceCompletedCount));
-
-  const completedRatio = numCompletedSubPieces / numTotalSubPieces;
-  const speed = (numCompletedSubPieces - numStartCompletedSubPieces) * Piece.subPieceLength * 1000 / moment().diff(startTime, "ms")
+const numCompletedPieces = state.pieces.filter(piece => piece.completed).length;
+  const completedRatio = numCompletedPieces / state.pieces.length;
+  const speed = (numCompletedPieces - numStartCompletedPieces) * state.torrent.pieceLength * 1000 / moment().diff(startTime, "ms")
   logger.info(
     `progress: ${numeral(completedRatio).format("0.00%")}, ` +
     `speed: ${numeral(speed).format("0.00a").toUpperCase()}B/s`

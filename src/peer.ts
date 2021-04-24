@@ -91,7 +91,6 @@ export class Peer {
       } catch (err) {
         this._socket.end();
         this._socket.destroy(Error(`received invalid message: ${err}`));
-        throw err;
       }
     });
 

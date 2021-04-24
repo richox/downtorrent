@@ -62,7 +62,7 @@ export class Peer {
   }
 
   private connect() {
-    logger.debug(`trying to connect peer: ${this._peerAddr}`);
+    logger.info("[%s] trying to connect peer", this._peerAddr);
     this._socket = net.createConnection(this._port, this._host);
     this._socket.on("connect", () => {
       this._socketConnected = true;
@@ -71,7 +71,7 @@ export class Peer {
         infoHash: state.torrent.infoHash,
         peerId: config.peerId,
       };
-      logger.debug("send Handshake message:", handshakeMessage);
+      logger.debug("[%s] send Handshake message: %s", this._peerAddr, handshakeMessage);
       this._socket.write(encodeMessage(handshakeMessage));
 
 
@@ -87,12 +87,12 @@ export class Peer {
         }
       } catch (err) {
         this._socket.end();
-        this._socket.destroy(Error(`received invalid message : ${err}`));
+        this._socket.destroy(Error(`received invalid message: ${err}`));
       }
     });
 
     this._socket.on("error", err => {
-      logger.info(`peer ${this._host}:${this._port} error: ${err}`);
+      logger.info("[%s] error: %s", this._peerAddr, err.message);
       this._socket.end();
       this._socket.destroy(err);
     });
@@ -105,7 +105,7 @@ export class Peer {
 
   private keepAlive() {
     if (this._socketConnected) {
-      logger.debug("send KeepAlive message");
+      logger.debug("[%s] send KeepAlive message", this._peerAddr);
       this._socket.write(encodeMessage({
         messageType: PeerMessageType.KEEP_ALIVE,
       }));
@@ -132,12 +132,12 @@ export class Peer {
       throw Error("info hash mismatched in handshake response");
     }
     this._handshaked = true;
-    logger.debug("send Interested message");
+    logger.debug("[%s] send Interested message", this._peerAddr);
     this._socket.write(encodeMessage({messageType: PeerMessageType.INTERESTED}));
   }
 
   private processChokeMessage() {
-    logger.debug("received Choke message");
+    logger.debug("[%s] received Choke message", this._peerAddr);
   }
 
   private processUnchokeMessage() {
@@ -145,15 +145,15 @@ export class Peer {
   }
 
   private processInterestedMessage() {
-    logger.debug("received Interested message");
+    logger.debug("[%s] received Interested message", this._peerAddr);
   }
 
   private processNotInterestedMessage() {
-    logger.debug("received NotInterested message");
+    logger.debug("[%s] received NotInterested message", this._peerAddr);
   }
 
   private processHaveMessage(message: PeerHaveMessage) {
-    logger.debug("received Have message");
+    logger.debug("[%s] received Have message", this._peerAddr);
   }
 
   private processBitfieldMessage(message: PeerBitfieldMessage) {
@@ -165,18 +165,18 @@ export class Peer {
   }
 
   private processRequestMessage(message: PeerRequestOrCancelMessage) {
-    logger.debug("received Request message:", message);
+    logger.debug("[%s] received Request message:", this._peerAddr, message);
   }
 
   private processPieceMessage(message: PeerPieceMessage) {
-    logger.debug("received Piece message:", message);
+    logger.debug("[%s] received Piece message:", this._peerAddr, message);
     state.pieces[message.pieceIndex].savePiece(message.pieceData, message.blockOffset);
     this._downloadingSubPieces -= 1;
     this.downloadNextSubPieces();
   }
 
   private processCancelMessage(message: PeerMessage) {
-    logger.debug("received Cancel message");
+    logger.debug("[%s] received Cancel message", this._peerAddr);
   }
 
   private downloadNextSubPieces() {
@@ -208,7 +208,7 @@ export class Peer {
       blockOffset: subPieceOffset,
       pieceLength: subPieceLength,
     };
-    logger.debug("send Request message:", requestMessage);
+    logger.debug("[%s] send Request message:", this._peerAddr, requestMessage);
     this._socket.write(encodeMessage(requestMessage));
   }
 }

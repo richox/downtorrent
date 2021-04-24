@@ -35,21 +35,25 @@ export class Tracker {
         timeout: 10000,
       });
     } catch (err) {
-      throw Error(`[tracker: ${this._trackerUrl}] get peers from tracker failed: ${err.message}`);
+      logger.warn("[%s] get peers from tracker error: %s", this._trackerUrl, err.message);
+      return;
     }
 
     if (trackerResponse.status != 200) {
-      throw Error(`[tracker: ${this._trackerUrl}] get peers from tracker failed: ${trackerResponse.statusText}`);
+      logger.warn("[%s] get peers from tracker error: %s", this._trackerUrl, trackerResponse.statusText);
+      return;
     }
 
     // decode peers data
     const trackerResponseData = bencode.decode(trackerResponse.data);
     if (trackerResponseData["failure reason"]) {
       const failureReason = bencode.encode(trackerResponseData["failure reason"]).toString();
-      throw Error(`[tracker: ${this._trackerUrl}] get peers from tracker failed: ${failureReason}`);
+      logger.warn("[%s] get peers from tracker error: %s", this._trackerUrl, failureReason);
+      return;
     }
     if (!(trackerResponseData.peers instanceof Array) && !(trackerResponseData.peers instanceof Buffer)) {
-      throw Error(`[tracker: ${this._trackerUrl}] get peers from tracker failed: unexpected peers data`);
+      logger.warn("[%s] get peers from tracker failed: unexpected peers data", this._trackerUrl);
+      return;
     }
 
     // update peers
@@ -75,7 +79,7 @@ export class Tracker {
     const newPeersCount = newPeerAddrs.length;
     const delPeersCount = this._peerAddrs.length - peerAddrs.length + newPeersCount;
     if (newPeersCount > 0 || delPeersCount > 0) {
-      logger.info(`[tracker: ${this._trackerUrl}] get ${newPeerAddrs.length} new peers, ${delPeersCount} peers out-dated`);
+      logger.info("[%s] get %s new peers, %s peers out-dated", this._trackerUrl, newPeerAddrs.length, delPeersCount);
     }
     this._peerAddrs = peerAddrs;
   }

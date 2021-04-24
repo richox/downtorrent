@@ -1,4 +1,5 @@
-import fs from 'fs';
+import crypto from "crypto";
+import fs from "fs";
 import {config, state} from "./downTorrent";
 
 interface Range {
@@ -49,7 +50,7 @@ export class Piece {
     return this._subPieceCompletedCount;
   }
 
-  public savePiece(subPieceData: Buffer, subPieceOffset: number) {
+  public saveSubPiece(subPieceData: Buffer, subPieceOffset: number) {
     if (subPieceOffset + subPieceData.length > this._pieceLength) {
       throw Error(`received piece length overflow: ${subPieceOffset + subPieceData.length}, sub piece length: ${subPieceData.length}`);
     }
@@ -64,7 +65,15 @@ export class Piece {
 
     // write piece to file if completed
     if (this.completed) {
-      this.writePieceToFile();
+      const sha1sum = crypto.createHash("sha1").update(this._pieceCache).digest("hex");
+      if (sha1sum.toUpperCase() == state.torrent.pieces[this._pieceIndex].toLocaleUpperCase()) {
+        this.writePieceToFile();
+      } else {
+        // checksum mismatch -- reset the whole piece
+        this._subPieceCompleted.fill(false);
+        this._subPieceCompletedCount = 0;
+        this._completed = false;
+      }
     }
   }
 

@@ -174,7 +174,7 @@ export class Peer {
 
   private processPieceMessage(message: PeerPieceMessage) {
     logger.debug("[%s] received Piece message:", this._peerAddr, message);
-    state.pieces[message.pieceIndex].savePiece(message.pieceData, message.blockOffset);
+    state.pieces[message.pieceIndex].saveSubPiece(message.pieceData, message.blockOffset);
     this._downloadingSubPieces -= 1;
     this.downloadNextSubPieces();
   }

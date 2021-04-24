@@ -4,7 +4,6 @@ import log4js from "log4js";
 import moment from "moment";
 import numeral from "numeral";
 import parseTorrent, {Instance as TorrentInstance} from "parse-torrent";
-import externalTrackerList from "./externalTrackerList";
 import {Peer} from "./peer";
 import {Piece} from "./piece";
 import {Tracker} from "./tracker";
@@ -15,11 +14,13 @@ logger.level = "info";
 // config
 export const config: {
   peerId: string;
+  externalTrackerListPath: string;
   downloadPath: string;
   torrentFileName: string;
   numMaxCompletedPieceCacheSize: number;
 } = {
   peerId: "-BT0001-000000000000",
+  externalTrackerListPath: "./externalTrackerList.txt",
   downloadPath: "./downloads",
   torrentFileName: process.argv[process.argv.length - 1],
   numMaxCompletedPieceCacheSize: 16777216,
@@ -57,6 +58,9 @@ state.pieces = Array.from({length: state.torrent.pieces?.length}, (_, pieceIndex
 });
 
 // update peer list
+const externalTrackerList = fs.readFileSync(config.externalTrackerListPath).toString().split("\n")
+  .map(line => line.trim())
+  .filter(line => line.length > 0);
 const updatePeerList = (() => {
   if (state.trackers.length == 0) {
     state.trackers = [...state.torrent.announce, ...externalTrackerList].map(trackerUrl => new Tracker(trackerUrl));

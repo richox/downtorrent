@@ -16,7 +16,7 @@ import {
 import {BitSet} from "./util/bitSet";
 
 const logger = log4js.getLogger("Peer");
-logger.level = "info";
+logger.level = "error";
 
 export class Peer {
   private static readonly numConcurrentDownloadingSubPieces: number = 4;

@@ -1,5 +1,5 @@
 import fs from "fs";
-import {sum} from "lodash";
+import {shuffle, sum} from "lodash";
 import log4js from "log4js";
 import moment from "moment";
 import numeral from "numeral";
@@ -17,10 +17,12 @@ export const config: {
   peerId: string;
   downloadPath: string;
   torrentFileName: string;
+  numMaxCompletedPieceCacheSize: number;
 } = {
   peerId: "-BT0001-000000000000",
   downloadPath: "./downloads",
   torrentFileName: process.argv[process.argv.length - 1],
+  numMaxCompletedPieceCacheSize: 16777216,
 };
 
 // initialize state
@@ -43,7 +45,7 @@ state.pieces = Array.from({length: state.torrent.pieces?.length}, (_, pieceIndex
 
 // print download file info
 state.torrent.files.forEach(file => {
-  console.log(numeral(file.length).format("0.00a").toUpperCase() + "B", file.name);
+  logger.info("torrent file: [%sB] - %s", numeral(file.length).format("0.00a").toUpperCase(), file.name);
 });
 
 // update peer list
@@ -71,11 +73,21 @@ setInterval(() => {
   const now = moment();
   state.peers = state.peers.filter(peer => {
     if (!peer.connected && now.diff(peer.createTime, "ms") > 30000) { // disconnected for longer than 30s
-      logger.info(`remove out-dated peer: ${peer.peerAddr}`);
+      logger.info("remove out-dated peer: %s", peer.peerAddr);
       return false;
     }
     return true;
   });
+}, 5000);
+
+// clear completed piece cache
+setInterval(() => {
+  const completedCachedPieces = state.pieces.filter(piece => piece.completed && piece.cached);
+  const cacheSize = sum(completedCachedPieces.map(piece => piece.pieceLength));
+  logger.debug("completed cached size: %sB", numeral(cacheSize).format("0.00a").toUpperCase());
+  if (cacheSize > config.numMaxCompletedPieceCacheSize) {
+    shuffle(completedCachedPieces).slice(0, completedCachedPieces.length / 2).forEach(piece => piece.clearCache());
+  }
 }, 5000);
 
 // print tracker and peer statistics

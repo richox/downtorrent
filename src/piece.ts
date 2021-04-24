@@ -13,7 +13,7 @@ export class Piece {
   _pieceIndex: number;
   _pieceLength: number;
   _pieceHash: string;
-  _pieceCache: Buffer;
+  _pieceCache: Buffer = null;
 
   _subPieceCompleted: boolean[];
   _subPieceCompletedCount: number;
@@ -23,7 +23,6 @@ export class Piece {
     this._pieceIndex = pieceIndex;
     this._pieceLength = pieceLength;
     this._pieceHash = pieceHash;
-    this._pieceCache = Buffer.alloc(pieceLength);
 
     this._completed = false;
     this._subPieceCompleted = Array.from({length: pieceLength / Piece.subPieceLength}, () => false);
@@ -42,6 +41,10 @@ export class Piece {
     return this._subPieceCompletedCount == this.subPieceTotalCount;
   }
 
+  public get cached(): boolean {
+    return this._pieceCache != null;
+  }
+
   public get subPieceTotalCount(): number {
     return this._subPieceCompleted.length;
   }
@@ -50,12 +53,19 @@ export class Piece {
     return this._subPieceCompletedCount;
   }
 
+  public clearCache() {
+    this._pieceCache = null;
+  }
+
   public saveSubPiece(subPieceData: Buffer, subPieceOffset: number) {
     if (subPieceOffset + subPieceData.length > this._pieceLength) {
       throw Error(`received piece length overflow: ${subPieceOffset + subPieceData.length}, sub piece length: ${subPieceData.length}`);
     }
 
     // write sub piece to buffer
+    if (!this.cached) {
+      this._pieceCache = Buffer.alloc(this._pieceLength);
+    }
     const subPieceIndex = Math.trunc(subPieceOffset / Piece.subPieceLength);
     if (!this._subPieceCompleted[subPieceIndex]) {
       this._subPieceCompleted[subPieceIndex] = true;

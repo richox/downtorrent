@@ -5,7 +5,7 @@ import log4js from "log4js";
 import {config, state} from "./downTorrent";
 
 const logger = log4js.getLogger("Tracker");
-logger.level = "info";
+logger.level = "error";
 
 export class Tracker {
   private _trackerUrl: string;

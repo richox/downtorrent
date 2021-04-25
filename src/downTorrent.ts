@@ -85,7 +85,7 @@ setInterval(() => {
   const now = moment();
   state.peers = state.peers.filter(peer => {
     if (!peer.connected && now.diff(peer.createTime, "ms") > 30000) { // disconnected for longer than 30s
-      logger.info("remove out-dated peer: %s", peer.peerAddr);
+      logger.debug("remove out-dated peer: %s", peer.peerAddr);
       return false;
     }
     return true;
@@ -118,17 +118,18 @@ setInterval(() => {
 }, 5000);
 
 // print download progress and speed
-const numStartCompletedPieces = state.pieces.filter(piece => piece.completed).length;
+const numTotalSubPieces = sum(state.pieces.map(piece => piece.subPieceTotalCount));
+const numStartCompletedSubPieces = sum(state.pieces.map(piece => piece.subPieceCompletedCount));
 const startTime = moment();
 setInterval(() => {
-const numCompletedPieces = state.pieces.filter(piece => piece.completed).length;
-  const completedRatio = numCompletedPieces / state.pieces.length;
-  const speed = (numCompletedPieces - numStartCompletedPieces) * state.torrent.pieceLength * 1000 / moment().diff(startTime, "ms")
+  const numCompletedSubPieces = sum(state.pieces.map(piece => piece.subPieceCompletedCount));
+  const completedRatio = numCompletedSubPieces / numTotalSubPieces;
+  const speed = (numCompletedSubPieces - numStartCompletedSubPieces) * Piece.subPieceLength * 1000 / moment().diff(startTime, "ms")
   logger.info(
     `progress: ${numeral(completedRatio).format("0.00%")}, ` +
     `speed: ${numeral(speed).format("0.00a").toUpperCase()}B/s`
   );
-  if (completedRatio >= 1) {
+  if (state.pieces.every(piece => piece.completed)) {
     logger.info("download finished!");
     process.exit();
   }

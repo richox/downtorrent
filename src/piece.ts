@@ -78,34 +78,34 @@ export class Piece {
     if (subPieceOffset + subPieceData.length > this._pieceLength) {
       throw Error(`received piece length overflow: ${subPieceOffset + subPieceData.length}, sub piece length: ${subPieceData.length}`);
     }
+    const subPieceIndex = Math.trunc(subPieceOffset / Piece.subPieceLength);
 
     // write sub piece to buffer
     if (!this.cached) {
       this._pieceCache = Buffer.alloc(this._pieceLength);
     }
-    const subPieceIndex = Math.trunc(subPieceOffset / Piece.subPieceLength);
     if (!this._subPieceCompleted[subPieceIndex]) {
       this._subPieceCompleted[subPieceIndex] = true;
       this._subPieceCompletedCount += 1;
       subPieceData.copy(this._pieceCache, subPieceOffset);
-    }
 
-    // write piece to file if completed
-    if (this.completed) {
-      let written = false;
-      const sha1sum = crypto.createHash("sha1").update(this._pieceCache).digest("hex");
-      if (sha1sum.toUpperCase() == state.torrent.pieces[this._pieceIndex].toLocaleUpperCase()) {
-        try {
-          this.writePieceToFile();
-          written = true;
-        } catch (err) {
-          logger.error("write piece to file error: %s", err.message);
+      // write piece to file if completed
+      if (this.completed) {
+        let written = false;
+        const sha1sum = crypto.createHash("sha1").update(this._pieceCache).digest("hex");
+        if (sha1sum.toUpperCase() == state.torrent.pieces[this._pieceIndex].toLocaleUpperCase()) {
+          try {
+            this.writePieceToFile();
+            written = true;
+          } catch (err) {
+            logger.error("write piece to file error: %s", err.message);
+          }
         }
-      }
 
-      if (!written) { // cannot write to file -- reset the piece
-        this._subPieceCompleted.buf.fill(0x00);
-        this._subPieceCompletedCount = 0;
+        if (!written) { // cannot write to file -- reset the piece
+          this._subPieceCompleted.buf.fill(0x00);
+          this._subPieceCompletedCount = 0;
+        }
       }
     }
   }

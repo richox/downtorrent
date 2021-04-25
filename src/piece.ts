@@ -2,6 +2,7 @@ import crypto from "crypto";
 import fs from "fs";
 import log4js from "log4js";
 import {config, state} from "./downTorrent";
+import {BitSet} from "./util/bitSet";
 
 const logger = log4js.getLogger("Piece");
 logger.level = "info";
@@ -19,17 +20,15 @@ export class Piece {
   _pieceHash: string;
   _pieceCache: Buffer = null;
 
-  _subPieceCompleted: boolean[];
+  _subPieceCompleted: BitSet;
   _subPieceCompletedCount: number;
-  _completed: boolean;
 
   public constructor(pieceIndex: number, pieceLength: number, pieceHash: string) {
     this._pieceIndex = pieceIndex;
     this._pieceLength = pieceLength;
     this._pieceHash = pieceHash;
 
-    this._completed = false;
-    this._subPieceCompleted = Array.from({length: pieceLength / Piece.subPieceLength}, () => false);
+    this._subPieceCompleted = new BitSet(Math.trunc((pieceLength + Piece.subPieceLength - 1) / Piece.subPieceLength));
     this._subPieceCompletedCount = 0;
 
     // check whether the piece has been downloaded
@@ -38,8 +37,7 @@ export class Piece {
     try {
       this.readPieceFromFile();
       if (crypto.createHash("sha1").update(this._pieceCache).digest("hex").toUpperCase() == this._pieceHash.toUpperCase()) {
-        this._completed = true;
-        this._subPieceCompleted.fill(true);
+        this._subPieceCompleted.buf.fill(0xff);
         this._subPieceCompletedCount = this._subPieceCompleted.length;
       }
     } catch (err) {
@@ -57,7 +55,7 @@ export class Piece {
   }
 
   public get completed(): boolean {
-    return this._subPieceCompletedCount == this.subPieceTotalCount;
+    return this._subPieceCompletedCount == this._subPieceCompleted.length;
   }
 
   public get cached(): boolean {
@@ -106,8 +104,7 @@ export class Piece {
       }
 
       if (!written) { // cannot write to file -- reset the piece
-        this._completed = false;
-        this._subPieceCompleted.fill(false);
+        this._subPieceCompleted.buf.fill(0x00);
         this._subPieceCompletedCount = 0;
       }
     }
@@ -117,16 +114,18 @@ export class Piece {
     subPieceOffset: number;
     subPieceLength: number;
   } {
-
     // find first incompleted sub piece after subPieceOffsetHint
-    const subPieceIndex = this._subPieceCompleted
-      .findIndex((completed, i) => !completed && i * Piece.subPieceLength >= subPieceOffsetHint);
-    const subPieceOffset = subPieceIndex * Piece.subPieceLength;
-    const subPieceLength = Math.min(Piece.subPieceLength, this._pieceLength - subPieceOffset);
-    return {
-      subPieceOffset,
-      subPieceLength,
-    };
+    for (let subPieceIndex = 0; subPieceIndex < this._subPieceCompleted.length; subPieceIndex++) {
+      if (!this._subPieceCompleted.getBit(subPieceIndex) && subPieceIndex * Piece.subPieceLength >= subPieceOffsetHint) {
+        const subPieceOffset = subPieceIndex * Piece.subPieceLength;
+        const subPieceLength = Math.min(Piece.subPieceLength, this._pieceLength - subPieceOffset);
+        return {
+          subPieceOffset,
+          subPieceLength,
+        };
+      }
+    }
+    throw Error("unreachable -- cannot get first incompleted sub piece");
   }
 
   private readPieceFromFile() {

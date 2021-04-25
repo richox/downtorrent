@@ -95,7 +95,7 @@ export class Peer {
     });
 
     this._socket.on("error", err => {
-      logger.info("[%s] error: %s", this._peerAddr, err.message);
+      logger.error("[%s] error: %s", this._peerAddr, err.message);
       this._socket.end();
       this._socket.destroy(err);
     });

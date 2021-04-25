@@ -43,7 +43,7 @@ export const state: {
 
 // init downloading files
 state.torrent.files.forEach(file => {
-  logger.info("torrent file: [%sB] - %s", numeral(file.length).format("0.00a").toUpperCase(), file.name);
+  logger.info("torrent file: [%s] - %s", numeral(file.length).format("0.00 ib"), file.name);
   const filename = `${config.downloadPath}/${file.name}`;
   if (!fs.existsSync(filename)) { // create file if not exists
     const fd = fs.openSync(filename, "w+");
@@ -96,7 +96,7 @@ setInterval(() => {
 setInterval(() => {
   const completedCachedPieces = state.pieces.filter(piece => piece.completed && piece.cached);
   const cacheSize = sum(completedCachedPieces.map(piece => piece.pieceLength));
-  logger.debug("completed cached size: %sB", numeral(cacheSize).format("0.00a").toUpperCase());
+  logger.debug("completed cached size: %s", numeral(cacheSize).format("0.00 ib"));
   if (cacheSize > config.numMaxCompletedPieceCacheSize) {
     shuffle(completedCachedPieces).slice(0, completedCachedPieces.length / 2).forEach(piece => piece.clearCache());
   }
@@ -119,18 +119,21 @@ setInterval(() => {
 
 // print download progress and speed
 const numTotalSubPieces = sum(state.pieces.map(piece => piece.subPieceTotalCount));
-const numStartCompletedSubPieces = sum(state.pieces.map(piece => piece.subPieceCompletedCount));
-const startTime = moment();
+let numLastCompletedSubPieces = sum(state.pieces.map(piece => piece.subPieceCompletedCount));
+let lastTime = moment();
 setInterval(() => {
+  let curTime = moment();
   const numCompletedSubPieces = sum(state.pieces.map(piece => piece.subPieceCompletedCount));
   const completedRatio = numCompletedSubPieces / numTotalSubPieces;
-  const speed = (numCompletedSubPieces - numStartCompletedSubPieces) * Piece.subPieceLength * 1000 / moment().diff(startTime, "ms")
+  const speed = (numCompletedSubPieces - numLastCompletedSubPieces) * Piece.subPieceLength * 1000 / curTime.diff(lastTime, "ms")
   logger.info(
     `progress: ${numeral(completedRatio).format("0.00%")}, ` +
-    `speed: ${numeral(speed).format("0.00a").toUpperCase()}B/s`
+    `speed: ${numeral(speed).format("0.00 ib")}/s`
   );
   if (state.pieces.every(piece => piece.completed)) {
     logger.info("download finished!");
     process.exit();
   }
+  numLastCompletedSubPieces = numCompletedSubPieces;
+  lastTime = curTime;
 }, 1000);
